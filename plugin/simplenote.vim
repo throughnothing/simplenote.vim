@@ -72,10 +72,8 @@ request = urllib2.Request(url, values)
 try:
   token = urllib2.urlopen(request).read()
 except IOError, e: # no connection exception
-  print user
-  print password
-  #vim.command('echoerr "Simplenote: Auth failed."')
-  #vim.command("return -1")
+  vim.command('echoerr "Simplenote: Auth failed."')
+  vim.command("return -1")
 
 vim.command('return "%s"' % token)
 ENDPYTHON

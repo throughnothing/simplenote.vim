@@ -21,20 +21,30 @@ if !has("python")
 endif
 
 " user auth settings
-let s:user = ""
-let s:password = ""
+let s:token = ""
+try
+  silent let s:user = g:SimpleNoteUserName
+catch
+  let s:user = ""
+endtry
+try
+  silent let s:password = g:SimpleNotePassword
+catch 
+  let s:password = ""
+endtry
 
-let s:user = g:SimpleNoteUserName
-let s:password = g:SimpleNotePassword
-
-if (s:user == "") || (s:password == "")
-  echoerr "No valid username or password."
-  finish
-endif
 
 "
 " Helper functions
 "
+function! s:SimpleNoteGetAuth()
+  if(s:user == "")
+    let s:user = input("SimpleNote Username: ")  
+  endif
+  if(s:password == "")
+    let s:password = inputsecret("SimpleNote Password: ")  
+  endif
+endfunction
 
 "
 " API functions
@@ -48,21 +58,24 @@ endif
 "
 " @return simplenote API token
 "
-function! s:SimpleNoteAuth(user, password)
+function! s:SimpleNoteAuth()
+  call s:SimpleNoteGetAuth()
 python << ENDPYTHON
 import vim, urllib2, base64
 url = 'https://simple-note.appspot.com/api/login'
 # params parsing
-user = vim.eval("a:user")
-password = vim.eval("a:password")
+user = vim.eval("s:user")
+password = vim.eval("s:password")
 auth_params = "email=%s&password=%s" % (user, password)
 values = base64.encodestring(auth_params)
 request = urllib2.Request(url, values)
 try:
   token = urllib2.urlopen(request).read()
 except IOError, e: # no connection exception
-  vim.command('echoerr "Simplenote: Auth failed."')
-  vim.command("return -1")
+  print user
+  print password
+  #vim.command('echoerr "Simplenote: Auth failed."')
+  #vim.command("return -1")
 
 vim.command('return "%s"' % token)
 ENDPYTHON
@@ -77,12 +90,12 @@ endfunction
 "
 " @return content of the desired note
 "
-function! s:GetNote(user, token, noteid)
+function! s:GetNote(noteid)
 python << ENDPYTHON
 import vim, urllib2, json
 # params
-user = vim.eval("a:user")
-token = vim.eval("a:token")
+user = vim.eval("s:user")
+token = vim.eval("s:token")
 noteid = vim.eval("a:noteid")
 # request note
 url = 'https://simple-note.appspot.com/api2/data/'
@@ -108,12 +121,12 @@ endfunction
 "
 " @return
 "
-function! s:UpdateNote(user, token, noteid, content)
+function! s:UpdateNote(noteid, content)
 python << ENDPYTHON
 import vim, urllib,  urllib2, json
 #params
-user = vim.eval("a:user")
-token = vim.eval("a:token")
+user = vim.eval("s:user")
+token = vim.eval("s:token")
 noteid = vim.eval("a:noteid")
 content = vim.eval("a:content")
 
@@ -139,12 +152,12 @@ endfunction
 "
 " @return list of note titles
 "
-function! s:GetNoteList(user, token)
+function! s:GetNoteList()
 python << ENDPYTHON
 import vim, json, urllib2
 # params
-user = vim.eval("a:user")
-token = vim.eval("a:token")
+user = vim.eval("s:user")
+token = vim.eval("s:token")
 url = 'https://simple-note.appspot.com/api2/index?'
 params = 'auth=%s&email=%s' % (token, user)
 request = urllib2.Request(url+params)
@@ -166,6 +179,10 @@ endfunction
 "
 
 function! s:SimpleNote(line1, line2, ...)
+  if(s:token == "")
+    let s:token = s:SimpleNoteAuth()
+  endif
+
   let listnotes = 0
   let args = (a:0 > 0) ? split(a:1, ' ') : []
   for arg in args
@@ -181,7 +198,7 @@ function! s:SimpleNote(line1, line2, ...)
   endfor
   unlet args
   if listnotes == 1
-    let notes = s:GetNoteList(s:user, s:token)
+    let notes = s:GetNoteList()
     let winnum = bufwinnr(bufnr('notes:'.s:user))
     if winnum != -1
       if winnum != bufwinnr('%')
@@ -195,7 +212,6 @@ function! s:SimpleNote(line1, line2, ...)
 
 endfunction
 
-let s:token = s:SimpleNoteAuth(s:user, s:password)
 
 " set the simplenote command
 command! -nargs=? -range=% SimpleNote :call <SID>SimpleNote(<line1>, <line2>, <f-args>)
